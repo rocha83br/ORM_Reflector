@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 11.00
 # Visual Studio 2010
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ORM_Reflector", "ORM_Reflector_Project\ORM_Reflector.csproj", "{A082A987-41C9-4ACC-A2C1-18D02925FAB6}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ORMReflector", "ORM_Reflector_Project\ORMReflector.csproj", "{A082A987-41C9-4ACC-A2C1-18D02925FAB6}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

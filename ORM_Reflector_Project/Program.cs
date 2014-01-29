@@ -2,29 +2,42 @@
 using System.IO;
 using System.Collections.Generic;
 using System.Linq;
+using System.Data.Linq.Mapping;
 using System.Text;
 using System.Reflection;
 using System.ComponentModel.DataAnnotations;
+using System.Diagnostics;
 
-namespace ORM_Reflector
+namespace ORMReflector
 {
     class Program
     {
         static void Main(string[] args)
         {
-            var reqArgs = 2;
+            var reqArgs = 0;
             StringBuilder strGen = new StringBuilder();
 
-            if (args.Count().Equals(reqArgs) && args[0].Contains(":\\"))
+            if ((args.Count() > reqArgs) && (args[0].Contains(":\\") || args[0].Equals("?")))
             {
-                var assemblyName = args[0];
-                var typeFullName = args[1];
-                var className = args.Count() == 3 ? args[2] : string.Empty;
-                var fileName = args.Count() == 4 ? args[3] : string.Empty;
-                var typeNamespace = string.Empty;
-                
                 if (!args[0].Equals("?"))
                 {
+                    var assemblyName = args[0];
+                    var typeFullName = args[1];
+                    var behavior = args.Count() > 2 ? args[2] : string.Empty;
+                    var fileName = args.Count() > 3 ? args[3] : string.Empty;
+                    var className = args.Count() > 4 ? args[4] : string.Empty;
+                    var reqMsg = args.Count() > 5 ? args[5] : string.Empty;
+                    var lenMsg = args.Count() > 6 ? args[6] : string.Empty;
+                    var typeNamespace = string.Empty;
+
+                    var serialize = (!string.IsNullOrEmpty(behavior) && ((int.Parse(behavior) & 1) == 1));
+                    var selfValidate = (!string.IsNullOrEmpty(behavior) && ((int.Parse(behavior) & 2) == 2));
+                    var createWS = (!string.IsNullOrEmpty(behavior) && ((int.Parse(behavior) & 4) == 4));
+                    var wcfReady = (!string.IsNullOrEmpty(behavior) && ((int.Parse(behavior) & 8) == 8));
+
+                    var knownTypeTp = "[KnownType(typeof({0}))]";
+                    var reqTypeTp = "\t\t[Required(ErrorMessage=\"{0}\")";
+
                     Console.Clear();
 
                     try
@@ -32,22 +45,77 @@ namespace ORM_Reflector
                         var objInstance = Activator.CreateInstanceFrom(assemblyName, typeFullName).Unwrap();
                         typeNamespace = string.Concat(objInstance.GetType().Namespace, ".");
 
-                        if (!string.IsNullOrEmpty(className))
+                        var objProps = objInstance.GetType().GetProperties();
+                        var objMethods = objInstance.GetType().GetMethods();
+
+                        if (string.IsNullOrEmpty(className))
                             className = objInstance.GetType().Name;
 
                         strGen.AppendLine("using System;");
+                        strGen.AppendLine("using System.Runtime.Serialization;");
                         strGen.AppendLine("using System.ComponentModel.DataAnnotations;");
                         strGen.AppendLine("using System.Collections;");
                         strGen.AppendLine("using System.Collections.Generic;");
-                        strGen.AppendLine("using System.Text;");
-                        strGen.AppendLine("using System.Linq;");
+                        
+                        if (createWS) 
+                            strGen.AppendLine("using System.Web.Services;");
 
-                        strGen.AppendLine(string.Concat(Environment.NewLine, "[Seriarilizable]"));
+                        strGen.Append(Environment.NewLine);
+                        
+                        if (serialize) strGen.AppendLine("[Seriarilizable]");
+
+                        if (createWS) strGen.AppendLine(@"[WebService(Namespace = ""http://tempuri.org/"")]");
+
+                        if (wcfReady)
+                        {
+                            strGen.AppendLine("[DataContract(IsReference = true)]");
+                            foreach (var prp in objProps.Where(obi => obi.PropertyType.IsClass))
+                                strGen.AppendLine(string.Format(knownTypeTp, prp.PropertyType.Name));
+
+                            strGen.Append(Environment.NewLine);
+                        }
+
                         strGen.AppendLine(string.Concat("public class ", className, " {"));
                         strGen.AppendLine(string.Concat(Environment.NewLine, "\t#region Properties", Environment.NewLine));
 
-                        foreach (var prp in objInstance.GetType().GetProperties())
+                        int contAlpha = 97;
+                        int contComplem = 1;
+                        foreach (var prp in objProps)
                         {
+                            if (contAlpha == 123)
+                            {
+                                contAlpha = 97;
+                                contComplem = 1;
+                            }
+
+                            if (selfValidate)
+                            {
+                                var dataAttrib = prp.GetCustomAttributes(true)
+                                                    .FirstOrDefault(cla => !(cla is System.Data.Linq.Mapping.AssociationAttribute));
+
+                                ColumnAttribute attribCfg = null;
+                                if (dataAttrib != null)
+                                {
+                                    attribCfg = (ColumnAttribute)dataAttrib;
+
+                                    if (attribCfg.IsPrimaryKey) strGen.AppendLine("\t\t[Key]");
+
+                                    if (!attribCfg.CanBeNull)
+                                    {
+                                        if (string.IsNullOrEmpty(reqMsg))
+                                            strGen.AppendLine("\t\t[Required]");
+                                        else
+                                            strGen.AppendLine(string.Format(reqTypeTp, string.Format(reqMsg, prp.PropertyType.Name)));
+                                    }
+                                }
+                            }
+
+                            if (serialize)
+                                strGen.AppendLine(string.Format("\t\t[JsonProperty(PropertyName = \"{0}\")]", 
+                                                  ((char)contAlpha++).ToString(), contComplem++.ToString()));
+
+                            if (wcfReady) strGen.AppendLine("\t\t[DataMember]");
+                            
                             if (!prp.PropertyType.Name.Contains("`1"))
                                 strGen.AppendLine(string.Concat("\t\tpublic ", prp.PropertyType.Name, " ", 
                                                                                prp.Name, " { get; set; }", Environment.NewLine));
@@ -65,13 +133,21 @@ namespace ORM_Reflector
                             }
                         }
 
+                        if (createWS)
+                        {
+
+                        }
+
                         strGen.AppendLine(string.Concat(Environment.NewLine, "\t#endregion", Environment.NewLine, Environment.NewLine, "}"));
                         strGen.AppendLine(string.Concat(Environment.NewLine, "Copy it to your Solution ;-)"));
 
                         Console.Write(strGen.ToString());
 
                         if (!string.IsNullOrEmpty(fileName))
+                        {
                             File.WriteAllText(fileName, strGen.ToString());
+                            Process.Start("Notepad.exe", fileName);
+                        } 
                         
                         Console.Read();
                     }
@@ -82,10 +158,16 @@ namespace ORM_Reflector
                     }                   
                 }
                 else
-                    Console.Write("Use : [Library Full Path], [Full Ojbect Name], [Class Name], [Destination File]");
+                    Console.WriteLine("Use : [Library Full Path], [Full Ojbect Name], [Behavior], [Class Name], [Destination File], [Required Valid. Msg], [Length Valid. Msg]");
+                    Console.Write(Environment.NewLine);
+                    Console.WriteLine("Behaviors : 1 - Serializable");
+                    Console.WriteLine("            2 - Self-Validatable");
+                    Console.WriteLine("            3 - Create WebService");
+                    Console.WriteLine("            4 - WCF Ready");
+                    Console.Read();
             }
             else
-                Console.Write("Argumento inválido.");
+                Console.Write("Invalid argument.");
         }
     }
 }
