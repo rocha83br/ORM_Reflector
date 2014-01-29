@@ -56,12 +56,12 @@ namespace ORMReflector
                         strGen.AppendLine("using System.ComponentModel.DataAnnotations;");
                         strGen.AppendLine("using System.Collections;");
                         strGen.AppendLine("using System.Collections.Generic;");
-                        
-                        if (createWS) 
+
+                        if (createWS)
                             strGen.AppendLine("using System.Web.Services;");
 
                         strGen.Append(Environment.NewLine);
-                        
+
                         if (serialize) strGen.AppendLine("[Seriarilizable]");
 
                         if (createWS) strGen.AppendLine(@"[WebService(Namespace = ""http://tempuri.org/"")]");
@@ -111,13 +111,13 @@ namespace ORMReflector
                             }
 
                             if (serialize)
-                                strGen.AppendLine(string.Format("\t\t[JsonProperty(PropertyName = \"{0}\")]", 
+                                strGen.AppendLine(string.Format("\t\t[JsonProperty(PropertyName = \"{0}\")]",
                                                   ((char)contAlpha++).ToString(), contComplem++.ToString()));
 
                             if (wcfReady) strGen.AppendLine("\t\t[DataMember]");
-                            
+
                             if (!prp.PropertyType.Name.Contains("`1"))
-                                strGen.AppendLine(string.Concat("\t\tpublic ", prp.PropertyType.Name, " ", 
+                                strGen.AppendLine(string.Concat("\t\tpublic ", prp.PropertyType.Name, " ",
                                                                                prp.Name, " { get; set; }", Environment.NewLine));
                             else
                             {
@@ -147,17 +147,18 @@ namespace ORMReflector
                         {
                             File.WriteAllText(fileName, strGen.ToString());
                             Process.Start("Notepad.exe", fileName);
-                        } 
-                        
+                        }
+
                         Console.Read();
                     }
                     catch (Exception ex)
                     {
                         Console.WriteLine(ex.Message);
                         Console.Read();
-                    }                   
+                    }
                 }
                 else
+                {
                     Console.WriteLine("Use : [Library Full Path], [Full Ojbect Name], [Behavior], [Class Name], [Destination File], [Required Valid. Msg], [Length Valid. Msg]");
                     Console.Write(Environment.NewLine);
                     Console.WriteLine("Behaviors : 1 - Serializable");
@@ -165,6 +166,7 @@ namespace ORMReflector
                     Console.WriteLine("            3 - Create WebService");
                     Console.WriteLine("            4 - WCF Ready");
                     Console.Read();
+                }
             }
             else
                 Console.Write("Invalid argument.");
