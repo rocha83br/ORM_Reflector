@@ -46,7 +46,23 @@ namespace ORMReflector
                         typeNamespace = string.Concat(objInstance.GetType().Namespace, ".");
 
                         var objProps = objInstance.GetType().GetProperties();
-                        var objMethods = objInstance.GetType().GetMethods();
+
+                        var objMethods = objInstance.GetType().GetMethods()
+                                                    .Where(mtd => !mtd.Name.StartsWith("get_")
+                                                               && !mtd.Name.StartsWith("set_")
+                                                               && !mtd.Name.StartsWith("add_")
+                                                               && !mtd.Name.StartsWith("remove_")
+                                                               && !mtd.Name.Equals("MethodInfo")
+                                                               && !mtd.Name.Equals("ToString")
+                                                               && !mtd.Name.Equals("Equals")
+                                                               && !mtd.Name.Equals("GetHashCode")
+                                                               && !mtd.Name.Equals("GetType")).ToArray();
+
+                        if ((serialize || selfValidate || wcfReady) && (objProps.Length == 0))
+                            throw new Exception("No property found in the Class.");
+
+                        if (createWS && (objMethods.Length == 0))
+                            throw new Exception("No method found in the Class.");
 
                         if (string.IsNullOrEmpty(className))
                             className = objInstance.GetType().Name;
@@ -133,9 +149,12 @@ namespace ORMReflector
                             }
                         }
 
-                        if (createWS)
+                        foreach (var mtd in objMethods)
                         {
-
+                            if (createWS)
+                            {
+                                    
+                            }
                         }
 
                         strGen.AppendLine(string.Concat(Environment.NewLine, "\t#endregion", Environment.NewLine, Environment.NewLine, "}"));
