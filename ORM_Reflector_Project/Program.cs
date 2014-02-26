@@ -7,6 +7,7 @@ using System.Text;
 using System.Reflection;
 using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
+using System.Data.Objects.DataClasses;
 
 namespace ORMReflector
 {
@@ -45,7 +46,10 @@ namespace ORMReflector
                         var objInstance = Activator.CreateInstanceFrom(assemblyName, typeFullName).Unwrap();
                         typeNamespace = string.Concat(objInstance.GetType().Namespace, ".");
 
-                        var objProps = objInstance.GetType().GetProperties();
+                        var objProps = objInstance.GetType().GetProperties()
+                                                  .Where(prp => !prp.PropertyType.Name.Equals("EntityReference`1")
+                                                             && !prp.Name.Equals("EntityState")
+                                                             && !prp.Name.Equals("EntityKey"));
 
                         var objMethods = objInstance.GetType().GetMethods()
                                                     .Where(mtd => !mtd.Name.StartsWith("get_")
@@ -58,7 +62,7 @@ namespace ORMReflector
                                                                && !mtd.Name.Equals("GetHashCode")
                                                                && !mtd.Name.Equals("GetType")).ToArray();
 
-                        if ((serialize || selfValidate || wcfReady) && (objProps.Length == 0))
+                        if ((serialize || selfValidate || wcfReady) && (objProps.Count() == 0))
                             throw new Exception("No property found in the Class.");
 
                         if (createWS && (objMethods.Length == 0))
@@ -78,7 +82,7 @@ namespace ORMReflector
 
                         strGen.Append(Environment.NewLine);
 
-                        if (serialize) strGen.AppendLine("[Seriarilizable]");
+                        if (serialize) strGen.AppendLine("[Serializable]");
 
                         if (createWS) strGen.AppendLine(@"[WebService(Namespace = ""http://tempuri.org/"")]");
 
@@ -106,22 +110,37 @@ namespace ORMReflector
 
                             if (selfValidate)
                             {
-                                var dataAttrib = prp.GetCustomAttributes(true)
-                                                    .FirstOrDefault(cla => !(cla is System.Data.Linq.Mapping.AssociationAttribute));
 
-                                ColumnAttribute attribCfg = null;
+                                var dataAttrib = prp.GetCustomAttributes(true)
+                                                    .FirstOrDefault(cla => (cla is System.Data.Linq.Mapping.AssociationAttribute)
+                                                                        || (cla is System.Data.Objects.DataClasses.EdmScalarPropertyAttribute));
+
                                 if (dataAttrib != null)
                                 {
-                                    attribCfg = (ColumnAttribute)dataAttrib;
-
-                                    if (attribCfg.IsPrimaryKey) strGen.AppendLine("\t\t[Key]");
-
-                                    if (!attribCfg.CanBeNull)
+                                    dynamic attribCfg = null;
+                                    bool nullAttrib = false;
+                                    if (dataAttrib != null)
                                     {
-                                        if (string.IsNullOrEmpty(reqMsg))
-                                            strGen.AppendLine("\t\t[Required]");
-                                        else
-                                            strGen.AppendLine(string.Format(reqTypeTp, string.Format(reqMsg, prp.PropertyType.Name)));
+                                        try
+                                        {
+                                            attribCfg = (ColumnAttribute)dataAttrib;
+                                            if (attribCfg.IsPrimaryKey) strGen.AppendLine("\t\t[Key]");
+                                            nullAttrib = attribCfg.CanBeNull;
+                                        }
+                                        catch
+                                        {
+                                            attribCfg = (EdmScalarPropertyAttribute)dataAttrib;
+                                            if (attribCfg.EntityKeyProperty) strGen.AppendLine("\t\t[Key]");
+                                            nullAttrib = attribCfg.IsNullable;
+                                        }
+
+                                        if (!nullAttrib)
+                                        {
+                                            if (string.IsNullOrEmpty(reqMsg))
+                                                strGen.AppendLine("\t\t[Required]");
+                                            else
+                                                strGen.AppendLine(string.Format(reqTypeTp, string.Format(reqMsg, prp.PropertyType.Name)));
+                                        }
                                     }
                                 }
                             }
@@ -140,11 +159,13 @@ namespace ORMReflector
                                 var childTypeName = prp.PropertyType.FullName.Substring(prp.PropertyType.FullName.IndexOf("[["));
                                 childTypeName = childTypeName.Split(',')[0].Replace("[[", string.Empty);
                                 childTypeName = childTypeName.Replace(string.Concat(prp.ReflectedType.Namespace, "."), string.Empty)
-                                                             .Replace("`1", string.Empty).Replace("EntitySet", "List");
+                                                             .Replace("`1", string.Empty).Replace("EntitySet", "List")
+                                                                                         .Replace("EntityCollection", "List");
 
                                 strGen.AppendLine(
                                     string.Concat("\t\tpublic ", prp.PropertyType.Name.Replace("`1", string.Empty)
-                                                                    .Replace("EntitySet", "List"), "<", childTypeName,
+                                                                    .Replace("EntitySet", "List")
+                                                                    .Replace("EntityCollection", "List"), "<", childTypeName,
                                                                     "> ", prp.Name, " { get; set; }", Environment.NewLine));
                             }
                         }
